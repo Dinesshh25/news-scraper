@@ -1,49 +1,72 @@
 import sys
+from datetime import datetime
 
-# Import komponen PyQt
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem
+    QTableWidgetItem, QFrame
 )
 
-# Import fungsi scraper
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QDesktopServices
+
 from scraper import jalankan_scraper
+
 
 class NewsScraperGUI(QWidget):
 
     def __init__(self):
         super().__init__()
 
-        # Judul window
-        self.setWindowTitle("News Scraper")
+        self.setWindowTitle("News Scraper Tool")
+        self.setGeometry(200, 200, 1150, 650)
 
-        # Ukuran window
-        self.setGeometry(200, 200, 900, 600)
-
-        # Layout utama
         main_layout = QVBoxLayout()
 
-        # =========================
-        # Bagian input URL
-        # =========================
+        # ======================
+        # TITLE
+        # ======================
+
+        title = QLabel("📰 News Scraper Dashboard")
+        title.setStyleSheet("""
+        font-size:28px;
+        font-weight:700;
+        color:#2C3E50;
+        margin-bottom:12px;
+        """)
+
+        # ======================
+        # INPUT AREA
+        # ======================
 
         input_layout = QHBoxLayout()
 
-        label = QLabel("News URL:")
+        label = QLabel("News URL")
 
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("https://indeks.kompas.com/")
 
         self.start_button = QPushButton("Start Scraping")
+        self.clear_button = QPushButton("Clear Table")
 
         input_layout.addWidget(label)
         input_layout.addWidget(self.url_input)
         input_layout.addWidget(self.start_button)
+        input_layout.addWidget(self.clear_button)
 
-        # =========================
-        # Tabel hasil scraping
-        # =========================
+        # ======================
+        # STATUS
+        # ======================
+
+        self.status_label = QLabel("Status: Ready")
+        self.status_label.setStyleSheet("color:#64748B;font-weight:500;")
+
+        # ======================
+        # CARD CONTAINER
+        # ======================
+
+        card = QFrame()
+        card_layout = QVBoxLayout()
 
         self.table = QTableWidget()
 
@@ -52,48 +75,185 @@ class NewsScraperGUI(QWidget):
             ["No", "Title", "Date", "Content"]
         )
 
-        self.table.setColumnWidth(0, 50)
-        self.table.setColumnWidth(1, 300)
-        self.table.setColumnWidth(2, 120)
-        self.table.setColumnWidth(3, 400)
+        self.table.setRowCount(0)
 
-        # =========================
-        # Susun layout
-        # =========================
+        self.table.verticalHeader().setVisible(False)
 
+        self.table.horizontalHeader().setVisible(True)
+        self.table.horizontalHeader().setFixedHeight(100)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
+
+        self.table.setColumnWidth(0, 60)
+        self.table.setColumnWidth(1, 360)
+        self.table.setColumnWidth(2, 130)
+        self.table.setColumnWidth(3, 580)
+
+        self.table.setWordWrap(True)
+        self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(True)
+
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setFixedHeight(60)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
+
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+
+        self.table.cellClicked.connect(self.open_article)
+
+        card_layout.addWidget(self.table)
+        card.setLayout(card_layout)
+
+        # ======================
+        # LAYOUT
+        # ======================
+
+        main_layout.addWidget(title)
         main_layout.addLayout(input_layout)
-        main_layout.addWidget(self.table)
+        main_layout.addWidget(self.status_label)
+        main_layout.addWidget(card)
 
         self.setLayout(main_layout)
 
-        # Hubungkan tombol dengan function
-        self.start_button.clicked.connect(self.start_scraping)
+        # ======================
+        # EVENTS
+        # ======================
 
-    # =====================================
-    # Function saat tombol diklik
-    # =====================================
+        self.start_button.clicked.connect(self.start_scraping)
+        self.clear_button.clicked.connect(self.clear_table)
+
+        # ======================
+        # STYLE
+        # ======================
+
+        self.setStyleSheet("""
+
+        QWidget{
+            background:#F4F7FB;
+            font-family:Segoe UI;
+            font-size:14px;
+        }
+
+        QLabel{
+            color:#34495E;
+            font-weight:600;
+        }
+
+        QLineEdit{
+            background:white;
+            padding:8px;
+            border:1px solid #E5E7EB;
+            border-radius:8px;
+        }
+
+        QPushButton{
+            padding:8px 18px;
+            border-radius:8px;
+            font-weight:600;
+        }
+
+        QPushButton#start{
+            background:#3B82F6;
+            color:white;
+        }
+
+        QPushButton#start:hover{
+            background:#2563EB;
+        }
+
+        QPushButton#start:pressed{
+            background:white;
+            color:#3B82F6;
+            border:2px solid #3B82F6;
+        }
+
+        QPushButton#clear{
+            background:#EF4444;
+            color:white;
+        }
+
+        QPushButton#clear:hover{
+            background:#DC2626;
+        }
+
+        QPushButton#clear:pressed{
+            background:white;
+            color:#EF4444;
+            border:2px solid #EF4444;
+        }
+
+        QFrame{
+            background:white;
+            border-radius:14px;
+            padding:12px;
+        }
+
+        QTableWidget{
+            border:none;
+            background:white;
+        }
+
+        QHeaderView::section{
+            background:#E2E8F0;
+            color:#1F2937;
+            border:none;
+            border-bottom:2px solid #CBD5E1;
+            padding:4px;
+            font-weight:700;
+        }
+
+        QTableWidget::item{
+            padding:8px;
+        }
+
+        QTableWidget::item:hover{
+            background:#EEF2FF;
+        }
+
+        QScrollBar:vertical{
+            background:#F1F5F9;
+            width:8px;
+        }
+
+        QScrollBar::handle:vertical{
+            background:#CBD5E1;
+            border-radius:4px;
+        }
+
+        QScrollBar::handle:vertical:hover{
+            background:#94A3B8;
+        }
+
+        """)
+
+        self.start_button.setObjectName("start")
+        self.clear_button.setObjectName("clear")
+
+    # ======================
+    # START SCRAPING
+    # ======================
 
     def start_scraping(self):
 
-        # Ambil URL dari input
         url = self.url_input.text()
 
         if not url:
-            print("URL kosong")
+            self.status_label.setText("Status: URL kosong")
             return
 
-        # Reset tabel
+        self.status_label.setText("Status: Scraping sedang berjalan...")
+
         self.table.setRowCount(0)
 
-        # Jalankan scraper
-        results = jalankan_scraper(url, batas_berita=5)
+        results = jalankan_scraper(url)
 
-        # Tampilkan hasil
         self.display_results(results)
 
-    # =====================================
-    # Function menampilkan hasil scraping
-    # =====================================
+        self.status_label.setText("Status: Scraping selesai")
+
+    # ======================
+    # DISPLAY RESULTS
+    # ======================
 
     def display_results(self, data):
 
@@ -102,24 +262,56 @@ class NewsScraperGUI(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
-            # Nomor
             self.table.setItem(row, 0, QTableWidgetItem(str(i + 1)))
 
-            # Judul
-            self.table.setItem(row, 1, QTableWidgetItem(news["judul"]))
+            title_item = QTableWidgetItem(news["judul"])
+            title_item.setForeground(Qt.blue)
+            title_item.setData(Qt.UserRole, news["url"])
 
-            # Tanggal
-            self.table.setItem(row, 2, QTableWidgetItem(news["tanggal"]))
+            self.table.setItem(row, 1, title_item)
 
-            # Isi berita dipotong
-            content_preview = news["isi"][:200]
+            date_text = news["tanggal"]
 
-            self.table.setItem(row, 3, QTableWidgetItem(content_preview))
+            try:
+                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                formatted_date = date_obj.strftime("%d/%m/%Y")
+            except:
+                formatted_date = date_text
 
+            self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
 
-# ==============================
-# Menjalankan aplikasi
-# ==============================
+            content = news["isi"][:700]
+
+            self.table.setItem(row, 3, QTableWidgetItem(content))
+
+        self.table.resizeRowsToContents()
+
+    # ======================
+    # OPEN ARTICLE
+    # ======================
+
+    def open_article(self, row, column):
+
+        if column == 1:
+
+            item = self.table.item(row, column)
+
+            if item:
+
+                url = item.data(Qt.UserRole)
+
+                if url:
+                    QDesktopServices.openUrl(QUrl(url))
+
+    # ======================
+    # CLEAR TABLE
+    # ======================
+
+    def clear_table(self):
+
+        self.table.setRowCount(0)
+        self.status_label.setText("Status: Table cleared")
+
 
 if __name__ == "__main__":
 
