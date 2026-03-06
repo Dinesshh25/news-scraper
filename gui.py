@@ -12,6 +12,7 @@ from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox
 
 from scraper import jalankan_scraper
+from exporter import export_to_csv, export_to_excel
 
 
 class NewsScraperGUI(QWidget):
@@ -47,6 +48,8 @@ class NewsScraperGUI(QWidget):
 
         self.start_button = QPushButton("Start Scraping")
         self.clear_button = QPushButton("Clear Table")
+        self.export_csv_button = QPushButton("Export CSV")
+        self.export_excel_button = QPushButton("Export Excel")
         self.prev_button = QPushButton("Previous")
         self.next_button = QPushButton("Next")
 
@@ -54,6 +57,8 @@ class NewsScraperGUI(QWidget):
         input_layout.addWidget(self.url_input)
         input_layout.addWidget(self.start_button)
         input_layout.addWidget(self.clear_button)
+        input_layout.addWidget(self.export_csv_button)
+        input_layout.addWidget(self.export_excel_button)
 
         # STATUS
         self.status_label = QLabel("Status: Ready")
@@ -137,6 +142,8 @@ class NewsScraperGUI(QWidget):
         # EVENTS
         self.start_button.clicked.connect(self.start_scraping)
         self.clear_button.clicked.connect(self.clear_table)
+        self.export_csv_button.clicked.connect(self.export_csv)
+        self.export_excel_button.clicked.connect(self.export_excel)
         self.prev_button.clicked.connect(self.prev_page)
         self.next_button.clicked.connect(self.next_page)
 
@@ -420,6 +427,28 @@ class NewsScraperGUI(QWidget):
 
         self.table.setRowCount(0)
         self.status_label.setText("Status: Table cleared")
+
+    # EXPORT CSV
+    def export_csv(self):
+        if not self.all_data:
+            QMessageBox.warning(self, "Export Error", "Tidak ada data untuk diexport.")
+            return
+        try:
+            filename = export_to_csv(self.all_data)
+            QMessageBox.information(self, "Export Success", f"Data berhasil diexport ke {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Gagal export CSV: {str(e)}")
+
+    # EXPORT EXCEL
+    def export_excel(self):
+        if not self.all_data:
+            QMessageBox.warning(self, "Export Error", "Tidak ada data untuk diexport.")
+            return
+        try:
+            filename = export_to_excel(self.all_data)
+            QMessageBox.information(self, "Export Success", f"Data berhasil diexport ke {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Gagal export Excel: {str(e)}")
 
 
 if __name__ == "__main__":

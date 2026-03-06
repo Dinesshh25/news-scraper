@@ -3,3 +3,4 @@ pyqt5-tools
 selenium
 pandas
 python-dateutil
+openpyxl

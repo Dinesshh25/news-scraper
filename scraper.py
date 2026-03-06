@@ -4,19 +4,26 @@ from selenium.webdriver.chrome.options import Options
 from urllib.parse import urlparse
 import time
 import re # Modul untuk mendeteksi pola teks (seperti angka)
+import logging
+
+# Setup logging
+logging.basicConfig(filename='scraper.log', level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 def jalankan_scraper(url_utama, batas_berita=3):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless") 
-    chrome_options.add_argument("--log-level=3") 
-    driver = webdriver.Chrome(options=chrome_options)
-    
-    domain_utama = urlparse(url_utama).netloc
-    domain_inti = ".".join(domain_utama.split(".")[-2:]) 
-    
-    print(f"Mencoba membuka: {url_utama}\n")
-    
     try:
+        logging.info(f"Memulai scraping untuk URL: {url_utama}")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless") 
+        chrome_options.add_argument("--log-level=3") 
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        domain_utama = urlparse(url_utama).netloc
+        domain_inti = ".".join(domain_utama.split(".")[-2:]) 
+        
+        print(f"Mencoba membuka: {url_utama}\n")
+        logging.info(f"Membuka URL utama: {url_utama}")
+        
         driver.get(url_utama)
         time.sleep(3) 
         
@@ -50,12 +57,14 @@ def jalankan_scraper(url_utama, batas_berita=3):
                             link_artikel.append(href)
         
         print(f"Ditemukan {len(link_artikel)} link artikel SUPER BERSIH.")
+        logging.info(f"Ditemukan {len(link_artikel)} link artikel")
         print("Mulai mengambil isi berita...\n")
         
         hasil_scraping = []
         
         for link in link_artikel[:batas_berita]:
             print(f"Membuka: {link}")
+            logging.info(f"Mengakses artikel: {link}")
             driver.get(link)
             time.sleep(3) 
             
@@ -64,7 +73,8 @@ def jalankan_scraper(url_utama, batas_berita=3):
                 judul = driver.find_element(By.TAG_NAME, "h1").text
             except:
                 judul = "Judul tidak ditemukan"
-                
+                logging.warning(f"Judul tidak ditemukan untuk {link}")
+                    
             # 2. Ambil Tanggal 
             tanggal = ""
             try:
@@ -73,12 +83,13 @@ def jalankan_scraper(url_utama, batas_berita=3):
                 tanggal = meta_date.get_attribute("content")
             except:
                 pass 
-                
+                    
             if not tanggal: 
                 try:
                     tanggal = driver.find_element(By.TAG_NAME, "time").text
                 except:
                     tanggal = "Tanggal tidak ditemukan"
+                    logging.warning(f"Tanggal tidak ditemukan untuk {link}")
 
             # 3. Ambil Isi Berita
             try:
@@ -90,7 +101,8 @@ def jalankan_scraper(url_utama, batas_berita=3):
                         isi_berita += teks + "\n\n"
             except:
                 isi_berita = "Isi tidak ditemukan"
-                
+                logging.warning(f"Isi tidak ditemukan untuk {link}")
+                    
             data_berita = {
                 "judul": judul,
                 "tanggal": tanggal,
@@ -98,15 +110,15 @@ def jalankan_scraper(url_utama, batas_berita=3):
                 "url": link
             }
             hasil_scraping.append(data_berita)
-            
-        return hasil_scraping
-
-    except Exception as e:
-        print(f"Error utama: {e}")
-        return []
+            logging.info(f"Berhasil mengambil data dari {link}")
         
-    finally:
         driver.quit()
+        logging.info(f"Scraping selesai, berhasil mengambil {len(hasil_scraping)} artikel")
+        return hasil_scraping
+    
+    except Exception as e:
+        logging.error(f"Error dalam proses scraping: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     test_url = "https://indeks.kompas.com/" 
