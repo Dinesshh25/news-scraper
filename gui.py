@@ -332,23 +332,25 @@ class NewsScraperGUI(QWidget):
 
             title_item = QTableWidgetItem(news["judul"])
             title_item.setForeground(Qt.blue)
-            title_item.setData(Qt.UserRole, news["url"])
+            title_item.setData(Qt.UserRole, news["url", ""])
 
             self.table.setItem(row, 1, title_item)
 
-            date_text = news["tanggal"]
-
+            date_text = news.get("tanggal", "Tanggal tidak tersedia")
+            
+        if date_text:
             try:
                 date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
                 formatted_date = date_obj.strftime("%d/%m/%Y")
             except:
-                formatted_date = date_text
+                formatted_date = str(date_text)[:20] 
 
-            self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
 
-            content = news["isi"][:700]
+        self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
 
-            self.table.setItem(row, 3, QTableWidgetItem(content))
+        content = news["isi"][:700]
+
+        self.table.setItem(row, 3, QTableWidgetItem(content))
 
         self.table.resizeRowsToContents()
 
