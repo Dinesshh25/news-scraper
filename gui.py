@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtWidgets import QMessageBox
 
 from scraper import jalankan_scraper
 
@@ -23,10 +24,7 @@ class NewsScraperGUI(QWidget):
 
         main_layout = QVBoxLayout()
 
-        # ======================
         # TITLE
-        # ======================
-
         title = QLabel("📰 News Scraper Dashboard")
         title.setStyleSheet("""
         font-size:28px;
@@ -35,10 +33,7 @@ class NewsScraperGUI(QWidget):
         margin-bottom:12px;
         """)
 
-        # ======================
         # INPUT AREA
-        # ======================
-
         input_layout = QHBoxLayout()
 
         label = QLabel("News URL")
@@ -54,17 +49,11 @@ class NewsScraperGUI(QWidget):
         input_layout.addWidget(self.start_button)
         input_layout.addWidget(self.clear_button)
 
-        # ======================
         # STATUS
-        # ======================
-
         self.status_label = QLabel("Status: Ready")
         self.status_label.setStyleSheet("color:#64748B;font-weight:500;")
 
-        # ======================
         # CARD CONTAINER
-        # ======================
-
         card = QFrame()
         card_layout = QVBoxLayout()
 
@@ -104,10 +93,7 @@ class NewsScraperGUI(QWidget):
         card_layout.addWidget(self.table)
         card.setLayout(card_layout)
 
-        # ======================
         # LAYOUT
-        # ======================
-
         main_layout.addWidget(title)
         main_layout.addLayout(input_layout)
         main_layout.addWidget(self.status_label)
@@ -115,17 +101,11 @@ class NewsScraperGUI(QWidget):
 
         self.setLayout(main_layout)
 
-        # ======================
         # EVENTS
-        # ======================
-
         self.start_button.clicked.connect(self.start_scraping)
         self.clear_button.clicked.connect(self.clear_table)
 
-        # ======================
         # STYLE
-        # ======================
-
         self.setStyleSheet("""
 
         QWidget{
@@ -158,7 +138,9 @@ class NewsScraperGUI(QWidget):
         }
 
         QPushButton#start:hover{
-            background:#2563EB;
+            background:white;
+            color:#3B82F6;
+            border:2px solid #3B82F6;
         }
 
         QPushButton#start:pressed{
@@ -173,7 +155,9 @@ class NewsScraperGUI(QWidget):
         }
 
         QPushButton#clear:hover{
-            background:#DC2626;
+            background:white;
+            color:#EF4444;
+            border:2px solid #EF4444;
         }
 
         QPushButton#clear:pressed{
@@ -229,10 +213,7 @@ class NewsScraperGUI(QWidget):
         self.start_button.setObjectName("start")
         self.clear_button.setObjectName("clear")
 
-    # ======================
     # START SCRAPING
-    # ======================
-
     def start_scraping(self):
 
         url = self.url_input.text()
@@ -245,16 +226,29 @@ class NewsScraperGUI(QWidget):
 
         self.table.setRowCount(0)
 
-        results = jalankan_scraper(url)
+        try:
+            results = jalankan_scraper(url)
 
-        self.display_results(results)
+            if not results:
+                self.status_label.setText("Status: Tidak ada berita ditemukan")
+                return
+
+            self.display_results(results)
+            self.status_label.setText("Status: Scraping selesai")
+
+        except Exception as e:
+
+            self.status_label.setText("Status: Scraping gagal")
+
+            QMessageBox.warning(
+                self,
+                "Scraping Error",
+                f"Terjadi error saat scraping:\n\n{str(e)}\n\nKemungkinan website terlalu lama merespon atau terjadi timeout."
+            )
 
         self.status_label.setText("Status: Scraping selesai")
 
-    # ======================
     # DISPLAY RESULTS
-    # ======================
-
     def display_results(self, data):
 
         for i, news in enumerate(data):
@@ -286,10 +280,7 @@ class NewsScraperGUI(QWidget):
 
         self.table.resizeRowsToContents()
 
-    # ======================
     # OPEN ARTICLE
-    # ======================
-
     def open_article(self, row, column):
 
         if column == 1:
@@ -303,10 +294,7 @@ class NewsScraperGUI(QWidget):
                 if url:
                     QDesktopServices.openUrl(QUrl(url))
 
-    # ======================
     # CLEAR TABLE
-    # ======================
-
     def clear_table(self):
 
         self.table.setRowCount(0)
