@@ -19,6 +19,9 @@ class NewsScraperGUI(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.current_page = 0
+        self.items_per_page = 5
+        self.all_data = []
         self.setWindowTitle("News Scraper Tool")
         self.setGeometry(200, 200, 1150, 650)
 
@@ -29,7 +32,7 @@ class NewsScraperGUI(QWidget):
         title.setStyleSheet("""
         font-size:28px;
         font-weight:700;
-        color:#2C3E50;
+        color:#0F802F;
         margin-bottom:12px;
         """)
 
@@ -37,12 +40,15 @@ class NewsScraperGUI(QWidget):
         input_layout = QHBoxLayout()
 
         label = QLabel("News URL")
+        label.setObjectName("urlLabel")
 
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("https://indeks.kompas.com/")
 
         self.start_button = QPushButton("Start Scraping")
         self.clear_button = QPushButton("Clear Table")
+        self.prev_button = QPushButton("Previous")
+        self.next_button = QPushButton("Next")
 
         input_layout.addWidget(label)
         input_layout.addWidget(self.url_input)
@@ -51,8 +57,15 @@ class NewsScraperGUI(QWidget):
 
         # STATUS
         self.status_label = QLabel("Status: Ready")
-        self.status_label.setStyleSheet("color:#64748B;font-weight:500;")
-
+        self.status_label.setStyleSheet("""
+        background:#ECFDF5;
+        color:#065F46;
+        padding:6px 10px;
+        border-radius:6px;
+        border:1px solid #A7F3D0;
+        font-weight:500;
+        """)
+        
         # CARD CONTAINER
         card = QFrame()
         card_layout = QVBoxLayout()
@@ -101,15 +114,44 @@ class NewsScraperGUI(QWidget):
 
         self.setLayout(main_layout)
 
+        # PAGINATION AREA
+        pagination_layout = QHBoxLayout()
+
+        self.page_label = QLabel("Page 1")
+        self.page_label.setStyleSheet("""
+        background:#FDF2F8;
+        color:#BE185D;
+        padding:6px 14px;
+        border-radius:10px;
+        font-weight:600;
+        """)
+
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(self.prev_button)
+        pagination_layout.addWidget(self.page_label)
+        pagination_layout.addWidget(self.next_button)
+        pagination_layout.addStretch()
+
+        main_layout.addLayout(pagination_layout)
+
         # EVENTS
         self.start_button.clicked.connect(self.start_scraping)
         self.clear_button.clicked.connect(self.clear_table)
+        self.prev_button.clicked.connect(self.prev_page)
+        self.next_button.clicked.connect(self.next_page)
 
         # STYLE
         self.setStyleSheet("""
 
+        QLabel#urlLabel{
+            background:#F0FDF4;
+            border:1px solid #86EFAC;
+            padding:6px 12px;
+            border-radius:8px;
+        }
+                           
         QWidget{
-            background:#F4F7FB;
+            background:#FFF1F7;
             font-family:Segoe UI;
             font-size:14px;
         }
@@ -122,7 +164,7 @@ class NewsScraperGUI(QWidget):
         QLineEdit{
             background:white;
             padding:8px;
-            border:1px solid #E5E7EB;
+            border:1px solid #F9A8D4;
             border-radius:8px;
         }
 
@@ -133,65 +175,83 @@ class NewsScraperGUI(QWidget):
         }
 
         QPushButton#start{
-            background:#3B82F6;
+            background:#10B981;
             color:white;
         }
 
         QPushButton#start:hover{
             background:white;
-            color:#3B82F6;
-            border:2px solid #3B82F6;
+            color:#10B981;
+            border:2px solid #10B981;
         }
 
         QPushButton#start:pressed{
             background:white;
-            color:#3B82F6;
-            border:2px solid #3B82F6;
+            color:#10B981;
+            border:2px solid #10B981;
         }
 
         QPushButton#clear{
-            background:#EF4444;
+            background:#EC4899;
             color:white;
         }
 
-        QPushButton#clear:hover{
+        PushButton#clear:hover{
             background:white;
-            color:#EF4444;
-            border:2px solid #EF4444;
+            color:#EC4899;
+            border:2px solid #EC4899;
         }
 
         QPushButton#clear:pressed{
             background:white;
-            color:#EF4444;
-            border:2px solid #EF4444;
+            color:#EC4899;
+            border:2px solid #EC4899;
+        }
+                           
+        QPushButton#prev,
+        QPushButton#next{
+            background:#ECFDF5;
+            color:#065F46;
+            border:1px solid #A7F3D0;
+        }
+
+        QPushButton#prev:hover,
+        QPushButton#next:hover{
+            background:#D1FAE5;
+        }
+
+        QPushButton#prev:pressed,
+        QPushButton#next:pressed{
+            background:#A7F3D0;
         }
 
         QFrame{
-            background:white;
+            background:#FFF9FB;
             border-radius:14px;
             padding:12px;
         }
 
         QTableWidget{
             border:none;
-            background:white;
+            background:#F0FDF4;
         }
 
         QHeaderView::section{
-            background:#E2E8F0;
-            color:#1F2937;
+            background:#FCE7F3;
+            color:#9D174D;
             border:none;
-            border-bottom:2px solid #CBD5E1;
+            border-bottom:2px solid #F9A8D4;
             padding:4px;
             font-weight:700;
         }
 
         QTableWidget::item{
             padding:8px;
+            background:#F7FEFA;
         }
 
         QTableWidget::item:hover{
-            background:#EEF2FF;
+            background:#ECFDF5;
         }
 
         QScrollBar:vertical{
@@ -212,6 +272,8 @@ class NewsScraperGUI(QWidget):
 
         self.start_button.setObjectName("start")
         self.clear_button.setObjectName("clear")
+        self.prev_button.setObjectName("prev")
+        self.next_button.setObjectName("next")
 
     # START SCRAPING
     def start_scraping(self):
@@ -233,7 +295,10 @@ class NewsScraperGUI(QWidget):
                 self.status_label.setText("Status: Tidak ada berita ditemukan")
                 return
 
-            self.display_results(results)
+            self.all_data = results
+            self.current_page = 0
+            self.display_page()
+
             self.status_label.setText("Status: Scraping selesai")
 
         except Exception as e:
@@ -280,6 +345,47 @@ class NewsScraperGUI(QWidget):
 
         self.table.resizeRowsToContents()
 
+    # DISPLAY PAGINATION
+    def display_page(self):
+
+        self.table.setRowCount(0)
+
+        start = self.current_page * self.items_per_page
+        end = start + self.items_per_page
+
+        page_data = self.all_data[start:end]
+
+        for i, news in enumerate(page_data):
+
+            row = self.table.rowCount()
+            self.table.insertRow(row)
+
+            self.table.setItem(row, 0, QTableWidgetItem(str(start + i + 1)))
+
+            title_item = QTableWidgetItem(news["judul"])
+            title_item.setForeground(Qt.blue)
+            title_item.setData(Qt.UserRole, news["url"])
+
+            self.table.setItem(row, 1, title_item)
+
+            date_text = news["tanggal"]
+
+            try:
+                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                formatted = date_obj.strftime("%d/%m/%Y")
+            except:
+                formatted = date_text
+
+            self.table.setItem(row, 2, QTableWidgetItem(formatted))
+
+            content = news["isi"][:700]
+            self.table.setItem(row, 3, QTableWidgetItem(content))
+
+        self.table.resizeRowsToContents()
+
+        total_pages = (len(self.all_data) - 1) // self.items_per_page + 1
+        self.page_label.setText(f"Page {self.current_page + 1} / {total_pages}")
+
     # OPEN ARTICLE
     def open_article(self, row, column):
 
@@ -293,6 +399,21 @@ class NewsScraperGUI(QWidget):
 
                 if url:
                     QDesktopServices.openUrl(QUrl(url))
+
+    # PREVIOUS PAGE
+    def prev_page(self):
+
+        if self.current_page > 0:
+            self.current_page -= 1
+            self.display_page()
+
+
+    # NEXT PAGE
+    def next_page(self):
+
+        if (self.current_page + 1) * self.items_per_page < len(self.all_data):
+            self.current_page += 1
+            self.display_page()
 
     # CLEAR TABLE
     def clear_table(self):
