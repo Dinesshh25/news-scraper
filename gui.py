@@ -11,7 +11,7 @@ from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox
 
-from scraper import jalankan_scraper
+from worker_thread import ScraperWorker
 from exporter import export_to_csv, export_to_excel
 
 
@@ -23,6 +23,7 @@ class NewsScraperGUI(QWidget):
         self.current_page = 0
         self.items_per_page = 5
         self.all_data = []
+        self.worker = None  # Referensi ke worker thread
         self.setWindowTitle("News Scraper Tool")
         self.setGeometry(200, 200, 1150, 650)
 
@@ -291,34 +292,92 @@ class NewsScraperGUI(QWidget):
             self.status_label.setText("Status: URL kosong")
             return
 
-        self.status_label.setText("Status: Scraping sedang berjalan...")
-
+        # Reset data dan tabel
+        self.all_data = []
+        self.current_page = 0
         self.table.setRowCount(0)
 
-        try:
-            results = jalankan_scraper(url)
+        # Disable tombol selama scraping
+        self.start_button.setEnabled(False)
+        self.clear_button.setEnabled(False)
+        self.export_csv_button.setEnabled(False)
+        self.export_excel_button.setEnabled(False)
 
-            if not results:
-                self.status_label.setText("Status: Tidak ada berita ditemukan")
-                return
+        self.status_label.setText("Status: Memulai scraping...")
 
-            self.all_data = results
+        # Buat worker thread dan hubungkan signal
+        self.worker = ScraperWorker(url, batas_berita=10, jumlah_halaman=2, delay=2)
+        self.worker.progress.connect(self.on_progress)
+        self.worker.article_scraped.connect(self.on_article_scraped)
+        self.worker.finished_signal.connect(self.on_scraping_finished)
+        self.worker.error.connect(self.on_scraping_error)
+        self.worker.start()
+
+    # SLOT: MENERIMA UPDATE PROGRESS
+    def on_progress(self, message):
+        self.status_label.setText(f"Status: {message}")
+
+    # SLOT: MENERIMA SATU ARTIKEL SECARA BERTAHAP
+    def on_article_scraped(self, article):
+        self.all_data.append(article)
+
+        # Tampilkan langsung di tabel
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        self.table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
+
+        title_item = QTableWidgetItem(article["judul"])
+        title_item.setForeground(Qt.blue)
+        title_item.setData(Qt.UserRole, article.get("url", ""))
+        self.table.setItem(row, 1, title_item)
+
+        date_text = article.get("tanggal", "Tanggal tidak tersedia")
+        if date_text:
+            try:
+                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                formatted_date = date_obj.strftime("%d/%m/%Y")
+            except Exception:
+                formatted_date = str(date_text)[:20]
+        else:
+            formatted_date = "Tanggal tidak tersedia"
+
+        self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
+
+        content = article["isi"][:700]
+        self.table.setItem(row, 3, QTableWidgetItem(content))
+
+        self.table.resizeRowsToContents()
+
+        # Update pagination label
+        total_pages = max(1, (len(self.all_data) - 1) // self.items_per_page + 1)
+        self.page_label.setText(f"Page {self.current_page + 1} / {total_pages}")
+
+    # SLOT: SCRAPING SELESAI
+    def on_scraping_finished(self):
+        # Re-enable semua tombol
+        self.start_button.setEnabled(True)
+        self.clear_button.setEnabled(True)
+        self.export_csv_button.setEnabled(True)
+        self.export_excel_button.setEnabled(True)
+
+        if not self.all_data:
+            self.status_label.setText("Status: Tidak ada berita ditemukan")
+        else:
+            self.status_label.setText(f"Status: Scraping selesai — {len(self.all_data)} berita")
             self.current_page = 0
             self.display_page()
 
-            self.status_label.setText("Status: Scraping selesai")
+        self.worker = None
 
-        except Exception as e:
-
-            self.status_label.setText("Status: Scraping gagal")
-
-            QMessageBox.warning(
-                self,
-                "Scraping Error",
-                f"Terjadi error saat scraping:\n\n{str(e)}\n\nKemungkinan website terlalu lama merespon atau terjadi timeout."
-            )
-
-        self.status_label.setText("Status: Scraping selesai")
+    # SLOT: SCRAPING ERROR
+    def on_scraping_error(self, error_message):
+        self.status_label.setText("Status: Scraping gagal")
+        QMessageBox.warning(
+            self,
+            "Scraping Error",
+            f"{error_message}\n\nKemungkinan website terlalu lama merespon atau terjadi timeout."
+        )
 
     # DISPLAY RESULTS
     def display_results(self, data):
@@ -332,25 +391,26 @@ class NewsScraperGUI(QWidget):
 
             title_item = QTableWidgetItem(news["judul"])
             title_item.setForeground(Qt.blue)
-            title_item.setData(Qt.UserRole, news["url", ""])
+            title_item.setData(Qt.UserRole, news.get("url", ""))
 
             self.table.setItem(row, 1, title_item)
 
             date_text = news.get("tanggal", "Tanggal tidak tersedia")
-            
-        if date_text:
-            try:
-                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
-                formatted_date = date_obj.strftime("%d/%m/%Y")
-            except:
-                formatted_date = str(date_text)[:20] 
 
+            if date_text:
+                try:
+                    date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                    formatted_date = date_obj.strftime("%d/%m/%Y")
+                except Exception:
+                    formatted_date = str(date_text)[:20]
+            else:
+                formatted_date = "Tanggal tidak tersedia"
 
-        self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
+            self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
 
-        content = news["isi"][:700]
+            content = news["isi"][:700]
 
-        self.table.setItem(row, 3, QTableWidgetItem(content))
+            self.table.setItem(row, 3, QTableWidgetItem(content))
 
         self.table.resizeRowsToContents()
 
