@@ -1,0 +1,2 @@
+2026-03-06 21:24:00,717 - INFO - Data berhasil diexport ke CSV: news_scraping_20260306_212400.csv
+2026-03-06 21:24:04,398 - ERROR - Error exporting to Excel: No module named 'openpyxl'
