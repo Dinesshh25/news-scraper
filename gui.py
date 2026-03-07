@@ -11,7 +11,8 @@ from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox
 
-from scraper import jalankan_scraper
+from worker_thread import ScraperWorker
+from exporter import export_to_csv, export_to_excel
 
 
 class NewsScraperGUI(QWidget):
@@ -22,6 +23,7 @@ class NewsScraperGUI(QWidget):
         self.current_page = 0
         self.items_per_page = 5
         self.all_data = []
+        self.worker = None  # Referensi ke worker thread
         self.setWindowTitle("News Scraper Tool")
         self.setGeometry(200, 200, 1150, 650)
 
@@ -47,6 +49,8 @@ class NewsScraperGUI(QWidget):
 
         self.start_button = QPushButton("Start Scraping")
         self.clear_button = QPushButton("Clear Table")
+        self.export_csv_button = QPushButton("Export CSV")
+        self.export_excel_button = QPushButton("Export Excel")
         self.prev_button = QPushButton("Previous")
         self.next_button = QPushButton("Next")
 
@@ -54,6 +58,8 @@ class NewsScraperGUI(QWidget):
         input_layout.addWidget(self.url_input)
         input_layout.addWidget(self.start_button)
         input_layout.addWidget(self.clear_button)
+        input_layout.addWidget(self.export_csv_button)
+        input_layout.addWidget(self.export_excel_button)
 
         # STATUS
         self.status_label = QLabel("Status: Ready")
@@ -137,6 +143,8 @@ class NewsScraperGUI(QWidget):
         # EVENTS
         self.start_button.clicked.connect(self.start_scraping)
         self.clear_button.clicked.connect(self.clear_table)
+        self.export_csv_button.clicked.connect(self.export_csv)
+        self.export_excel_button.clicked.connect(self.export_excel)
         self.prev_button.clicked.connect(self.prev_page)
         self.next_button.clicked.connect(self.next_page)
 
@@ -284,34 +292,91 @@ class NewsScraperGUI(QWidget):
             self.status_label.setText("Status: URL kosong")
             return
 
-        self.status_label.setText("Status: Scraping sedang berjalan...")
+        # Jangan reset data, agar hasil scraping URL sebelumnya tetap tersimpan
+        # dan nomor artikel di URL baru akan melanjut dari nomor terakhir
+        # (user dapat mengklik "Clear Table" secara manual jika ingin reset)
 
-        self.table.setRowCount(0)
+        # Disable tombol selama scraping
+        self.start_button.setEnabled(False)
+        self.clear_button.setEnabled(False)
+        self.export_csv_button.setEnabled(False)
+        self.export_excel_button.setEnabled(False)
 
-        try:
-            results = jalankan_scraper(url)
+        self.status_label.setText("Status: Memulai scraping...")
 
-            if not results:
-                self.status_label.setText("Status: Tidak ada berita ditemukan")
-                return
+        # Buat worker thread dan hubungkan signal
+        self.worker = ScraperWorker(url, batas_berita=10, jumlah_halaman=2, delay=2)
+        self.worker.progress.connect(self.on_progress)
+        self.worker.article_scraped.connect(self.on_article_scraped)
+        self.worker.finished_signal.connect(self.on_scraping_finished)
+        self.worker.error.connect(self.on_scraping_error)
+        self.worker.start()
 
-            self.all_data = results
+    # SLOT: MENERIMA UPDATE PROGRESS
+    def on_progress(self, message):
+        self.status_label.setText(f"Status: {message}")
+
+    # SLOT: MENERIMA SATU ARTIKEL SECARA BERTAHAP
+    def on_article_scraped(self, article):
+        self.all_data.append(article)
+
+        # Tampilkan langsung di tabel
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        self.table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
+
+        title_item = QTableWidgetItem(article["judul"])
+        title_item.setForeground(Qt.blue)
+        title_item.setData(Qt.UserRole, article.get("url", ""))
+        self.table.setItem(row, 1, title_item)
+
+        date_text = article.get("tanggal", "Tanggal tidak tersedia")
+        if date_text:
+            try:
+                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                formatted_date = date_obj.strftime("%d/%m/%Y")
+            except Exception:
+                formatted_date = str(date_text)[:20]
+        else:
+            formatted_date = "Tanggal tidak tersedia"
+
+        self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
+
+        content = article["isi"][:700]
+        self.table.setItem(row, 3, QTableWidgetItem(content))
+
+        self.table.resizeRowsToContents()
+
+        # Update pagination label
+        total_pages = max(1, (len(self.all_data) - 1) // self.items_per_page + 1)
+        self.page_label.setText(f"Page {self.current_page + 1} / {total_pages}")
+
+    # SLOT: SCRAPING SELESAI
+    def on_scraping_finished(self):
+        # Re-enable semua tombol
+        self.start_button.setEnabled(True)
+        self.clear_button.setEnabled(True)
+        self.export_csv_button.setEnabled(True)
+        self.export_excel_button.setEnabled(True)
+
+        if not self.all_data:
+            self.status_label.setText("Status: Tidak ada berita ditemukan")
+        else:
+            self.status_label.setText(f"Status: Scraping selesai — {len(self.all_data)} berita")
             self.current_page = 0
             self.display_page()
 
-            self.status_label.setText("Status: Scraping selesai")
+        self.worker = None
 
-        except Exception as e:
-
-            self.status_label.setText("Status: Scraping gagal")
-
-            QMessageBox.warning(
-                self,
-                "Scraping Error",
-                f"Terjadi error saat scraping:\n\n{str(e)}\n\nKemungkinan website terlalu lama merespon atau terjadi timeout."
-            )
-
-        self.status_label.setText("Status: Scraping selesai")
+    # SLOT: SCRAPING ERROR
+    def on_scraping_error(self, error_message):
+        self.status_label.setText("Status: Scraping gagal")
+        QMessageBox.warning(
+            self,
+            "Scraping Error",
+            f"{error_message}\n\nKemungkinan website terlalu lama merespon atau terjadi timeout."
+        )
 
     # DISPLAY RESULTS
     def display_results(self, data):
@@ -325,17 +390,20 @@ class NewsScraperGUI(QWidget):
 
             title_item = QTableWidgetItem(news["judul"])
             title_item.setForeground(Qt.blue)
-            title_item.setData(Qt.UserRole, news["url"])
+            title_item.setData(Qt.UserRole, news.get("url", ""))
 
             self.table.setItem(row, 1, title_item)
 
-            date_text = news["tanggal"]
+            date_text = news.get("tanggal", "Tanggal tidak tersedia")
 
-            try:
-                date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
-                formatted_date = date_obj.strftime("%d/%m/%Y")
-            except:
-                formatted_date = date_text
+            if date_text:
+                try:
+                    date_obj = datetime.fromisoformat(date_text.replace("Z", "+00:00"))
+                    formatted_date = date_obj.strftime("%d/%m/%Y")
+                except Exception:
+                    formatted_date = str(date_text)[:20]
+            else:
+                formatted_date = "Tanggal tidak tersedia"
 
             self.table.setItem(row, 2, QTableWidgetItem(formatted_date))
 
@@ -420,6 +488,28 @@ class NewsScraperGUI(QWidget):
 
         self.table.setRowCount(0)
         self.status_label.setText("Status: Table cleared")
+
+    # EXPORT CSV
+    def export_csv(self):
+        if not self.all_data:
+            QMessageBox.warning(self, "Export Error", "Tidak ada data untuk diexport.")
+            return
+        try:
+            filename = export_to_csv(self.all_data)
+            QMessageBox.information(self, "Export Success", f"Data berhasil diexport ke {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Gagal export CSV: {str(e)}")
+
+    # EXPORT EXCEL
+    def export_excel(self):
+        if not self.all_data:
+            QMessageBox.warning(self, "Export Error", "Tidak ada data untuk diexport.")
+            return
+        try:
+            filename = export_to_excel(self.all_data)
+            QMessageBox.information(self, "Export Success", f"Data berhasil diexport ke {filename}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Gagal export Excel: {str(e)}")
 
 
 if __name__ == "__main__":
