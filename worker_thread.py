@@ -87,16 +87,25 @@ class ScraperWorker(QThread):
                 for tag in semua_tag_a:
                     href = tag.get_attribute("href")
 
-                    if href and href.startswith("http") and domain_inti in href:
-                        if href.count("-") >= 2 and re.search(r'\d{2,}', href):
-                            aman = True
-                            for kata in kata_terlarang:
-                                if kata in href.lower():
-                                    aman = False
-                                    break
+                    # debug output can help see which links are considered
+                    # print("worker candidate:", href)
 
-                            if aman and href not in link_artikel:
-                                link_artikel.append(href)
+                    if not href or not href.startswith("http"):
+                        continue
+                    if domain_inti not in href:
+                        continue
+
+                    aman = True
+                    for kata in kata_terlarang:
+                        if kata in href.lower():
+                            aman = False
+                            break
+
+                    if not aman:
+                        continue
+
+                    if href not in link_artikel:
+                        link_artikel.append(href)
 
                 # Navigasi ke halaman berikutnya
                 if hal < self.jumlah_halaman - 1:
@@ -113,8 +122,12 @@ class ScraperWorker(QThread):
                         break
 
             total_link = len(link_artikel)
+            # log kumpulan link pada thread agar kita yakin jumlahnya >1
+            self.progress.emit(f"Link yang dikumpulkan: {total_link}")
+            for l in link_artikel:
+                self.progress.emit(f"  {l}")
             jumlah_target = min(self.batas_berita, total_link)
-            self.progress.emit(f"Ditemukan {total_link} link. Mengambil {jumlah_target} berita...")
+            self.progress.emit(f"Mengambil {jumlah_target} berita...")
 
             # ---- TAHAP 2: SCRAPE SETIAP ARTIKEL (BERTAHAP) ----
             for idx, link in enumerate(link_artikel[:self.batas_berita]):

@@ -292,10 +292,9 @@ class NewsScraperGUI(QWidget):
             self.status_label.setText("Status: URL kosong")
             return
 
-        # Reset data dan tabel
-        self.all_data = []
-        self.current_page = 0
-        self.table.setRowCount(0)
+        # Jangan reset data, agar hasil scraping URL sebelumnya tetap tersimpan
+        # dan nomor artikel di URL baru akan melanjut dari nomor terakhir
+        # (user dapat mengklik "Clear Table" secara manual jika ingin reset)
 
         # Disable tombol selama scraping
         self.start_button.setEnabled(False)

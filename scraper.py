@@ -33,21 +33,34 @@ def jalankan_scraper(url_utama, batas_berita=10, jumlah_halaman=2):
 
             for tag in semua_tag_a:
                 href = tag.get_attribute("href")
+
+                # simple debug print so we can see which urls are visited
+                # (comment out later when everything works)
+                # print("candidate href=", href)
+
+                # Filter: awali http dan berada dalam domain utama
+                if not href or not href.startswith("http"):
+                    continue
+                if domain_inti not in href:
+                    continue
+
+                # beberapa situs memakai struktur berbeda, jadi jangan terlalu
+                # ketat terhadap jumlah '-' atau angka. jika ingin membatasi
+                # gunakan regex yang sesuai dengan situs target, misalnya
+                # artikel kompas selalu punya '/YYYY/MM/DD/' di url.
                 
-                # Filter: Harus dimulai http, satu domain, dan mengandung minimal 2 dash (-)
-                if href and href.startswith("http") and domain_inti in href:
-                    # Regex r'\d{2,}' untuk memastikan ada angka (ID berita/Tanggal)
-                    if href.count("-") >= 2 and re.search(r'\d{2,}', href):
-                        
-                        aman = True
-                        for kata in kata_terlarang:
-                            if kata in href.lower():
-                                aman = False
-                                break
-                        
-                        
-                        if aman and href not in link_artikel:
-                            link_artikel.append(href)
+                aman = True
+                for kata in kata_terlarang:
+                    if kata in href.lower():
+                        aman = False
+                        break
+
+                if not aman:
+                    continue
+
+                # pastikan tidak duplikat
+                if href not in link_artikel:
+                    link_artikel.append(href)
             
             if hal < jumlah_halaman - 1: 
                 try:
@@ -61,8 +74,10 @@ def jalankan_scraper(url_utama, batas_berita=10, jumlah_halaman=2):
 
         # --- PENGOLAHAN LINK YANG DITEMUKAN ---
         print(f"\nTotal ditemukan {len(link_artikel)} link unik.")
+        # debugging: tampilkan semua link sebelum diproses
+        for l in link_artikel:
+            print("  ->", l)
         
-        # --- PENGOLAHAN LINK YANG DITEMUKAN ---
         hasil_scraping = []
         for link in link_artikel[:batas_berita]:
             print(f"Membuka: {link}")
